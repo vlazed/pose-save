@@ -194,17 +194,26 @@ if SERVER then
 	local function ApplyRagdollPose(ply, entity, data)
 		local pose = data
 		duplicator.ClearEntityModifier(entity, hookName)
+
+		-- If pose save is disabled, then we don't want to leave it hidden in the newer save
+		if not enablePoseSave:GetBool() then
+			return
+		end
+
 		-- Make sure to only apply poses when the physics model count changes
-		if istable(pose) and pose.count ~= entity:GetPhysicsObjectCount() then
+		if istable(pose) then
 			log("Physics object count differs. Preserving pose for " .. tostring(entity))
-			for name, p in pairs(pose.transforms) do
-				local bone = entity:LookupBone(name)
+			for bone = 0, entity:GetBoneCount() - 1 do
+				local name = entity:GetBoneName(bone)
+				local p = pose.transforms[name]
+				if not p then
+					continue
+				end
+
 				local pb = BoneToPhysBone(entity, bone)
 				local po = entity:GetPhysicsObjectNum(pb)
 
-				print(name, bone, entity:TranslatePhysBoneToBone(pb))
-
-				log("Set " .. name .. " pose")
+				-- log("Set " .. name .. " pose")
 				if po then
 					local ppo = entity:GetPhysicsObjectNum(BoneToPhysBone(entity, entity:LookupBone(p.parent)))
 
@@ -213,26 +222,30 @@ if SERVER then
 					if ppo then
 						pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
 					else
-						print("Recursing")
-						print("Start at", name)
+						-- print("Recursing")
+						-- print("Start at", name)
 						-- Recurse until the parent bone is physical. Meanwhile, accumulate local transforms for nonphysical bones
 						local walk = p
 						local parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
 						local i, max = 0, 255
 						while pose.transforms[walk.parent] and parentPhysBone == -1 and i < max do
-							print(walk.parent)
+							-- print(walk.parent)
 							walk = pose.transforms[walk.parent]
 							pos, ang = LocalToWorld(pos, ang, walk.pos, walk.ang)
 							parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
 							i = i + 1
 						end
-						print("Final parent", walk.parent)
+						-- print("Final parent", walk.parent)
 
 						ppo = entity:GetPhysicsObjectNum(parentPhysBone)
 						pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
 					end
+					po:EnableMotion(true)
+					po:Wake()
 					po:SetPos(pos, true)
 					po:SetAngles(ang)
+					po:EnableMotion(false)
+					po:Wake()
 				else
 					local pBone = entity:LookupBone(p.parent)
 
@@ -308,7 +321,7 @@ if SERVER then
 			return
 		end
 		timer.Simple(0, function()
-			if IsValid(entity) and entity:CreatedByMap() and validClasses[entity:GetClass()] then
+			if IsValid(entity) and not entity:CreatedByMap() and validClasses[entity:GetClass()] then
 				addPoseHooks(entity)
 			end
 		end)
