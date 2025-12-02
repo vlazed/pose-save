@@ -19,7 +19,7 @@ end
 
 ---@class PoseData
 ---@field transforms {[string]: Pose}
----@field count integer
+---@field hash string
 
 local BoneToPhysBone, PhysToNonPhys, GetPhysBoneParent
 do
@@ -168,6 +168,20 @@ do
 	end
 end
 
+---Generate a hash using the physics objects. This inherently contains
+---the physics object count and order via its convex meshes
+---@param entity Entity
+local function physicsHash(entity)
+	local hash = {}
+	for i = 0, entity:GetPhysicsObjectCount() - 1 do
+		local po = entity:GetPhysicsObjectNum(i)
+		local mesh = po:GetMeshConvexes()
+		table.insert(hash, mesh)
+	end
+
+	return util.SHA256(util.TableToJSON(hash))
+end
+
 if SERVER then
 	local hookName = "ragdoll_pose_save"
 
@@ -200,8 +214,8 @@ if SERVER then
 			return
 		end
 
-		-- Make sure to only apply poses when the physics model count changes
-		if istable(pose) then
+		-- Make sure to only apply poses when the physics model differs
+		if istable(pose) and pose.hash ~= physicsHash(entity) then
 			log("Physics object count differs. Preserving pose for " .. tostring(entity))
 			for bone = 0, entity:GetBoneCount() - 1 do
 				local name = entity:GetBoneName(bone)
@@ -272,7 +286,7 @@ if SERVER then
 			---@type PoseData
 			local pose = {
 				transforms = {},
-				count = entity:GetPhysicsObjectCount(),
+				hash = physicsHash(entity),
 			}
 
 			buildEntityBoneCache(entity)
