@@ -14,7 +14,11 @@ Preserve ragdoll poses when changing physics models between GMod saves
 
 ## Description
 
-This keeps ragdolls in the same pose when the user switches their ragdoll's physics models. This can be toggled via `ragdoll_pose_save` convar.
+|![img](/media/pose-save-preview.gif)|
+|:-:|
+|Ragdoll Pose Save approximates your ragdoll's poses|
+
+This addon attempts to keep ragdolls in the same pose when the user switches their ragdoll's physics models. This can be toggled via `ragdoll_pose_save` convar.
 
 ### Features
 
