@@ -24,6 +24,7 @@ This addon attempts to keep ragdolls in the same pose when the user switches the
 
 - **Save support**: This adds an additional entity modifier to save ragdoll poses only when the physics object count differs
   - Physics models with the same number of physics objects may produce subtle differences in pose
+- **Addon support**: This currently supports [Ragdoll Resizer](https://steamcommunity.com/sharedfiles/filedetails/?id=470366741) and stretched ragdolls (using the [Ragdoll Stretch](https://steamcommunity.com/sharedfiles/filedetails/?id=529986984) and [Ragdoll Mover](https://steamcommunity.com/workshop/filedetails/?id=104575630) tools)
 
 ### Rational
 
@@ -39,7 +40,7 @@ The goal is to achieve `pose A` from `physics model B`. This addon sets out to a
 
 ### Remarks
 
-WIP
+- Some poses may not position correctly on load. This is noticeable with Ragdoll Resizer entities. To overcome this, set `ragdoll_pose_save_override 1` and try to load the save again.
 
 ## Disclaimer
 
