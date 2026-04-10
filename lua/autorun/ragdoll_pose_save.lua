@@ -7,6 +7,15 @@ local enablePoseSave = CreateConVar(
 	1
 )
 
+local overrideePoseSave = CreateConVar(
+	"ragdoll_pose_save_override",
+	"0",
+	FCVAR_ARCHIVE + FCVAR_REPLICATED,
+	"Always replace ragdoll poses, even if the physics model doesn't change. This fixes weird offsets with resized ragdolls",
+	0,
+	1
+)
+
 local function log(...)
 	print(Format("[Ragdoll Pose Save] %s", ...))
 end
@@ -215,8 +224,9 @@ if SERVER then
 		end
 
 		-- Make sure to only apply poses when the physics model differs
-		if istable(pose) and pose.hash ~= physicsHash(entity) then
+		if overrideePoseSave:GetBool() or (istable(pose) and pose.hash ~= physicsHash(entity)) then
 			log("Physics object count differs. Preserving pose for " .. tostring(entity))
+
 			for bone = 0, entity:GetBoneCount() - 1 do
 				local name = entity:GetBoneName(bone)
 				local p = pose.transforms[name]
@@ -229,48 +239,49 @@ if SERVER then
 
 				-- log("Set " .. name .. " pose")
 				if po then
-					local ppo = entity:GetPhysicsObjectNum(BoneToPhysBone(entity, entity:LookupBone(p.parent)))
+					-- local ppo = entity:GetPhysicsObjectNum(BoneToPhysBone(entity, entity:LookupBone(p.parent)))
 
-					-- TODO: Handle case when a parent physics object becomes nonphysical
-					local pos, ang = p.pos, p.ang
-					if ppo then
-						pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
-					else
-						-- print("Recursing")
-						-- print("Start at", name)
-						-- Recurse until the parent bone is physical. Meanwhile, accumulate local transforms for nonphysical bones
-						local walk = p
-						local parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
-						local i, max = 0, 255
-						while pose.transforms[walk.parent] and parentPhysBone == -1 and i < max do
-							-- print(walk.parent)
-							walk = pose.transforms[walk.parent]
-							pos, ang = LocalToWorld(pos, ang, walk.pos, walk.ang)
-							parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
-							i = i + 1
-						end
-						-- print("Final parent", walk.parent)
+					-- local pos, ang = p.pos, p.ang
+					-- if ppo then
+					-- 	pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
+					-- else
+					-- 	-- print("Recursing")
+					-- 	-- print("Start at", name)
+					-- 	-- Recurse until the parent bone is physical. Meanwhile, accumulate local transforms for nonphysical bones
+					-- 	local walk = p
+					-- 	local parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
+					-- 	local i, max = 0, 255
+					-- 	while pose.transforms[walk.parent] and parentPhysBone == -1 and i < max do
+					-- 		-- print(walk.parent)
+					-- 		walk = pose.transforms[walk.parent]
+					-- 		pos, ang = LocalToWorld(pos, ang, walk.pos, walk.ang)
+					-- 		parentPhysBone = BoneToPhysBone(entity, entity:LookupBone(walk.parent))
+					-- 		i = i + 1
+					-- 	end
+					-- 	-- print("Final parent", walk.parent)
 
-						ppo = entity:GetPhysicsObjectNum(parentPhysBone)
-						pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
-					end
+					-- 	ppo = entity:GetPhysicsObjectNum(parentPhysBone)
+					-- 	pos, ang = LocalToWorld(pos, ang, ppo:GetPos(), ppo:GetAngles())
+					-- end
 					po:EnableMotion(true)
 					po:Wake()
-					po:SetPos(pos, true)
-					po:SetAngles(ang)
+					po:SetPos(p.worldPos, true)
+					po:SetAngles(p.worldAng)
 					po:EnableMotion(false)
 					po:Wake()
 				else
 					local pBone = entity:LookupBone(p.parent)
 
-					-- Calculate on clientside to save some work on server
-					net.Start("ragdoll_pose_save_calculate_bone", true)
-					net.WriteEntity(entity)
-					net.WriteUInt(bone, 8)
-					net.WriteUInt(pBone, 8)
-					net.WriteVector(p.pos)
-					net.WriteAngle(p.ang)
-					net.Send(ply)
+					if pBone then
+						-- Calculate on clientside to save some work on server
+						net.Start("ragdoll_pose_save_calculate_bone", true)
+						net.WriteEntity(entity)
+						net.WriteUInt(bone, 8)
+						net.WriteUInt(pBone, 8)
+						net.WriteVector(p.pos)
+						net.WriteAngle(p.ang)
+						net.Send(ply)
+					end
 				end
 
 				entity:ManipulateBoneScale(bone, p.scale)
@@ -309,14 +320,33 @@ if SERVER then
 						ang
 					)
 
+					local po = entity:GetPhysicsObjectNum(BoneToPhysBone(entity, bone))
+
 					---@type Pose
 					local data = {
 						pos = pos,
 						ang = ang,
+						worldPos = po and po:GetPos(),
+						worldAng = po and po:GetAngles(),
 						scale = entity:GetManipulateBoneScale(bone),
 						parent = entity:GetBoneName(parent),
 					}
 					pose.transforms[boneName] = data
+				else
+					local po = entity:GetPhysicsObjectNum(BoneToPhysBone(entity, bone))
+
+					---@type Pose
+					local data = {
+						pos = pos,
+						ang = ang,
+						worldPos = po and po:GetPos(),
+						worldAng = po and po:GetAngles(),
+						scale = entity:GetManipulateBoneScale(bone),
+						parent = entity:GetBoneName(parent),
+					}
+					pose.transforms[boneName] = data
+					-- print(boneName)
+					-- PrintTable(pose.transforms)
 				end
 			end
 
